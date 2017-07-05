@@ -3,7 +3,7 @@ use v6.c;
 use Bailador::Exceptions;
 use Bailador::Request;
 
-class Bailador::Route { ... }
+role Bailador::Route { ... }
 
 role Bailador::Routing {
     ## !! those two members are *actually* private, due to
@@ -162,12 +162,14 @@ role Bailador::Routing {
     }
 }
 
-class Bailador::Route does Bailador::Routing {
+role Bailador::Route does Bailador::Routing {
     subset HttpMethod of Str where {$_ eq any <GET PUT POST HEAD PUT DELETE TRACE OPTIONS CONNECT PATCH> }
     has HttpMethod @.method;
     has Str $.path-str;        # string representation of route path
     has Regex $.path;
     has Callable $.code is rw;
+
+    method execute(Match $match) { ... }
 
     sub route_to_regex($route) {
         $route.split('/').map({
