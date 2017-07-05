@@ -1,6 +1,6 @@
 use v6.c;
 
-use Bailador::Route;
+use Bailador::RouteHelper;
 
 role Bailador::Feature::AutoHead {
 
@@ -36,7 +36,7 @@ role Bailador::Feature::AutoHead {
                 };
                 my $path-str   = $orig-route.path-str;
                 my $path       = $orig-route.path;
-                my $head-route = Bailador::Route.new('HEAD', $path, $code, $path-str);
+                my $head-route = make-simple-route('HEAD', $path, $code, $path-str);
                 $route.add_route($head-route);
             }
         }

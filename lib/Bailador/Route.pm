@@ -19,8 +19,7 @@ role Bailador::Routing {
     method recurse-on-routes(Str $method, Str $uri) {
         for @.routes -> $r {
             if $r!match: $method, $uri -> $match {
-                my @params = $match.list;
-                my $result = $r.code.(|@params);
+                my $result = $r.execute($match);
 
                 if $result ~~ Failure {
                     $result.exception.throw;
@@ -79,11 +78,6 @@ role Bailador::Routing {
         $curr.routes.push($route);
     }
 
-    multi method add_route(Str $method, Pair $x) {
-        my $route = Bailador::Route.new($method, $x);
-        self.add_route($route);
-    }
-
     ## Prefix Route Stuff
     method !get-prefix-route {
         return $.prefix-route
@@ -111,46 +105,16 @@ role Bailador::Routing {
         return self;
     }
 
-    multi method prefix(Pair $x){
-        self.prefix($x.key, $x.value);
-    }
-
-    multi method prefix(Str $prefix, Callable $code) {
+     method prefix(Bailador::Route $prefix, Callable $code) {
         my $curr = self!get_current_route();
-        $curr!set-prefix-route( Bailador::Route.new('ANY', $prefix, sub { True }) );
+        $curr!set-prefix-route( $prefix );
         $code.();
         self!del_current_route();
     }
 
     method prefix-enter(Callable $code) {
         my $curr = self!get_current_route();
-        $curr.code = $code;
-    }
-
-    ## syntactic sugar!
-    method get(Pair $x) {
-        self.add_route: 'GET', $x;
-        return $x;
-    }
-
-    method post(Pair $x) {
-        self.add_route: 'POST', $x;
-        return $x;
-    }
-
-    method put(Pair $x) {
-        self.add_route: 'PUT', $x;
-        return $x;
-    }
-
-    method delete(Pair $x) {
-        self.add_route: 'DELETE', $x;
-        return $x;
-    }
-
-    method patch(Pair $x) {
-        self.add_route: 'PATCH', $x;
-        return $x;
+        $curr.set-prefix-enter: $code;
     }
 
     method static-dir(Pair $x) {
@@ -162,39 +126,13 @@ role Bailador::Routing {
     }
 }
 
+subset HttpMethod of Str where {$_ eq any <GET PUT POST HEAD PUT DELETE TRACE OPTIONS CONNECT PATCH> }
+
 role Bailador::Route does Bailador::Routing {
-    subset HttpMethod of Str where {$_ eq any <GET PUT POST HEAD PUT DELETE TRACE OPTIONS CONNECT PATCH> }
     has HttpMethod @.method;
     has Str $.path-str;        # string representation of route path
     has Regex $.path;
-    has Callable $.code is rw;
 
     method execute(Match $match) { ... }
 
-    sub route_to_regex($route) {
-        $route.split('/').map({
-            my $r = $_;
-            if $_.substr(0, 1) eq ':' {
-               $r = q{(<-[\/\.]>+)};
-            }
-            $r
-        }).join("'/'");
-    }
-
-    multi submethod new(Str @method, Regex $path, Callable $code, Str $path-str = $path.perl) {
-        self.bless(:@method, :$path, :$code, :$path-str);
-    }
-    multi submethod new(Str $method, Regex $path, Callable $code, Str $path-str = $path.perl) {
-        my Str @methods = $method eq 'ANY'
-        ?? <GET PUT POST HEAD PUT DELETE TRACE OPTIONS CONNECT PATCH>
-        !! ($method);
-        self.new(@methods, $path, $code, $path-str);
-    }
-    multi submethod new(Str $method, Str $path, Callable $code, Str $path-str = $path.perl) {
-        my $regex = "/ ^ " ~ route_to_regex($path) ~ " [ \$ || <?before '/' > ] /";
-        self.new($method, $regex.EVAL, $code, $path-str);
-    }
-    multi submethod new($meth, Pair $route) {
-        self.new($meth, $route.key, $route.value, $route.key.perl);
-    }
 }
