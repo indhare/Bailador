@@ -26,6 +26,12 @@ sub make-simple-route(*@a, *%a) is export {
     Bailador::Route::Simple.new(|@a, |%a);
 }
 
+sub make-static-dir-route(Pair $x) is export {
+    my $path = $x.key;
+    my IO $directory = $x.value ~~ IO ?? $x.value !! $*PROGRAM.parent.child($x.value.Str);
+    return Bailador::Route::StaticFile.new(path => $x.key, directory => $directory);
+}
+
 my sub route_to_regex($route) {
     my $regex = $route.split('/').map({
         my $r = $_;

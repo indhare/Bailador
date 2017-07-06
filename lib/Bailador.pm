@@ -68,7 +68,7 @@ sub head(Pair $x) is export {
 }
 
 sub static-dir(Pair $x) is export {
-    app.static-dir: $x;
+    app.add_route: make-static-dir-route($x);
 }
 
 sub prefix(Pair $x) is export {

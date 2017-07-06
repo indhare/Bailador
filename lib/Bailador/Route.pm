@@ -116,14 +116,6 @@ role Bailador::Routing {
         my $curr = self!get_current_route();
         $curr.set-prefix-enter: $code;
     }
-
-    method static-dir(Pair $x) {
-        my $path = $x.key;
-        my IO $directory = $x.value ~~ IO ?? $x.value !! $*PROGRAM.parent.child($x.value.Str);
-        require Bailador::Route::StaticFile;
-        self.add_route: Bailador::Route::StaticFile.new(path => $x.key, directory => $directory);
-        return $x;
-    }
 }
 
 subset HttpMethod of Str where {$_ eq any <GET PUT POST HEAD PUT DELETE TRACE OPTIONS CONNECT PATCH> }
