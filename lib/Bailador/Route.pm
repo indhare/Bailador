@@ -18,7 +18,7 @@ role Bailador::Routing {
     ## Route Dispatch Stuff
     method recurse-on-routes(Str $method, Str $uri) {
         for @.routes -> $r {
-            if $r!match: $method, $uri -> $match {
+            if $r.match: $method, $uri -> $match {
                 my $result = $r.execute($match);
 
                 if $result ~~ Failure {
@@ -33,7 +33,8 @@ role Bailador::Routing {
                             $match.to == $match.from ??
                             $uri.substr($match.to) !!
                             $match.postmatch;
-                        return $r.recurse-on-routes($method, $postmatch);
+                        my $prematch = $match.prematch;
+                        return $r.recurse-on-routes($method, $prematch ~ $postmatch);
                         CATCH {
                             when X::Bailador::NoRouteFound {
                                 # continue with the next route
@@ -52,29 +53,13 @@ role Bailador::Routing {
         die X::Bailador::NoRouteFound.new;
     }
 
-    method !match (Str $method, Str $path) {
-        if @.method {
-            return False if @.method.any ne $method
-        }
-
-        my Match $match = $path ~~ $.path;
-        if @.routes {
-            # we have children routes -- so this is a prefixroute
-            # its okay not to match the whole regular expression.
-
-            return $match if $match;
-        } else {
-            return $match if $match and $match.postmatch eq '';
-        }
-        return False;
-    }
 
     ## Add Routes#
     multi method add_route(Bailador::Route $route) {
         my $curr = self!get_current_route();
         # avoid obvious duplicate routes
-        my $matches = $curr.routes.grep({ $_.method.Str eq $route.method.Str and $_.path.perl eq $route.path.perl });
-        die "duplicate route: {$route.method.Str} {$route.path.perl}" if $matches;
+        my $matches = $curr.routes.first({ $_.is-similar-to($route) });
+        die "duplicate route: {$route.gist}" if $matches;
         $curr.routes.push($route);
     }
 
@@ -119,12 +104,67 @@ role Bailador::Routing {
 }
 
 subset HttpMethod of Str where {$_ eq any <GET PUT POST HEAD PUT DELETE TRACE OPTIONS CONNECT PATCH> }
+subset UrlMatcher where * ~~ Regex|Str;
 
 role Bailador::Route does Bailador::Routing {
-    has HttpMethod @.method;
-    has Str $.path-str;        # string representation of route path
-    has Regex $.path;
+    has HttpMethod @.method is required;
+    has UrlMatcher $.url-matcher is required;
+    has Regex $.regex is rw;
 
     method execute(Match $match) { ... }
+    method build-regex() { ... }
 
+    submethod BUILD-ROLE(:$method, :$url-matcher) {
+        my @all-methods = <GET PUT POST HEAD PUT DELETE TRACE OPTIONS CONNECT PATCH>;
+        @!method = 'ANY' ~~ any(@$method) ?? @all-methods !! $method;
+        $!url-matcher = $url-matcher;
+    }
+
+    method match (Str $method, Str $path) {
+        if @.method {
+            return False if @.method.any ne $method
+        }
+        return self!url-matcher($path);
+    }
+
+    method !url-matcher(Str $path) {
+
+        unless $.regex {
+            if $.url-matcher ~~ Regex {
+                $.regex = $.url-matcher;
+            } else {
+                $.regex = self.build-regex();
+            }
+        }
+
+        my Match $match = $path ~~ $.regex;
+        #say "path: ", $path, " with regex: ", $.regex, " -> ", $match;
+        return $match;
+    }
+
+    method !get-regex-str {
+        return $.url-matcher.split('/').map({
+            my $r = $_;
+            if $_.substr(0, 1) eq ':' {
+                $r = q{(<-[\/\.]>+)};
+            }
+            $r
+         }).join("'/'");
+    }
+
+    method route-spec {
+        $.url-matcher ~~ Str ??  $.url-matcher !! $.url-matcher.perl;
+    }
+
+    method is-similar-to(Bailador::Route $other) {
+        my $r = @.method.Str eq $other.method.Str && $.route-spec eq $other.route-spec;
+        # if $r {
+        #     say "self:  ", self.gist;
+        #     say "other: ", $other.gist;
+        # }
+        return $r;
+    }
+    method gist {
+        self.method.Str ~ " " ~ self.route-spec;
+    }
 }

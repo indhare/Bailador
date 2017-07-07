@@ -2,7 +2,7 @@ use v6.c;
 
 use Bailador::Route;
 
-class Bailador::Route::Simple does Bailador::Route {
+class Bailador::Route::AutoHead does Bailador::Route {
     has Callable $.code is required;
 
     submethod BUILD(:$!code, *%_) {
@@ -10,7 +10,7 @@ class Bailador::Route::Simple does Bailador::Route {
     }
 
     method execute(Match $match) {
-        $.code.(| $match.list);
+        $.code.($match);
     }
 
     method build-regex() {
